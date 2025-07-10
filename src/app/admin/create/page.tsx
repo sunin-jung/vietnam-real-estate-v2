@@ -338,13 +338,13 @@ export default function AdminCreatePage() {
       }
 
       // 가격과 면적이 0보다 큰지 확인
-      if (formData.price <= 0) {
+      if (Number(formData.price) <= 0) {
         setError('가격은 0보다 커야 합니다.');
         setIsLoading(false);
         return;
       }
 
-      if (formData.area <= 0) {
+      if (Number(formData.area) <= 0) {
         setError('면적은 0보다 커야 합니다.');
         setIsLoading(false);
         return;

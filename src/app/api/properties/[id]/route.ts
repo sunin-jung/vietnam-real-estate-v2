@@ -123,6 +123,8 @@ export async function PUT(
     const updatedProperty: Property = {
       ...properties[propertyIndex],
       ...body,
+      price: Number(body.price),
+      area: Number(body.area),
       updated_at: new Date().toISOString(),
     };
     

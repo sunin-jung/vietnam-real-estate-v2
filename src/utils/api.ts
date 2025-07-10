@@ -389,6 +389,8 @@ export const propertyApi = {
     const updatedProperty: Property = {
       ...mockProperties[index],
       ...data,
+      price: Number(data.price),
+      area: Number(data.area),
       updated_at: new Date().toISOString(),
     };
     

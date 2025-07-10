@@ -1,5 +1,8 @@
 import axios from 'axios';
 import { Property, PropertyFormData, ApiResponse } from '@/types';
+import { db, storage } from '@/lib/firebase';
+import { collection, addDoc, getDocs, getDoc, doc, updateDoc, deleteDoc, query, where } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 // API 기본 URL 설정
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
@@ -240,184 +243,52 @@ let mockProperties: Property[] = loadPropertiesFromStorage();
 export const propertyApi = {
   // 모든 매물 조회
   getAll: async (filters?: any): Promise<Property[]> => {
-    // localStorage에서 최신 데이터 로드
-    mockProperties = loadPropertiesFromStorage();
-    
-    // 임시로 지연 효과 추가
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    let filteredProperties = [...mockProperties];
-    
-    if (filters) {
-      if (filters.search) {
-        filteredProperties = filteredProperties.filter(property =>
-          property.title.toLowerCase().includes(filters.search.toLowerCase()) ||
-          property.description.toLowerCase().includes(filters.search.toLowerCase())
-        );
-      }
-      
-      if (filters.region) {
-        filteredProperties = filteredProperties.filter(property =>
-          property.region === filters.region
-        );
-      }
-      
-      if (filters.transaction_type) {
-        filteredProperties = filteredProperties.filter(property =>
-          property.transaction_type === filters.transaction_type
-        );
-      }
-      
-      if (filters.property_type) {
-        // 통합된 매물 유형 필터링 처리
-        filteredProperties = filteredProperties.filter(property =>
-          property.property_type === filters.property_type
-        );
-      }
-      
-      if (filters.minPrice) {
-        filteredProperties = filteredProperties.filter(property =>
-          property.price >= filters.minPrice
-        );
-      }
-      
-      if (filters.maxPrice) {
-        filteredProperties = filteredProperties.filter(property =>
-          property.price <= filters.maxPrice
-        );
-      }
-      
-      if (filters.minArea) {
-        filteredProperties = filteredProperties.filter(property =>
-          property.area >= filters.minArea
-        );
-      }
-      
-      if (filters.maxArea) {
-        filteredProperties = filteredProperties.filter(property =>
-          property.area <= filters.maxArea
-        );
-      }
-    }
-    
-    // 최신순으로 정렬 (created_at 기준)
-    return filteredProperties.sort((a, b) => 
-      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    );
+    const q = collection(db, 'properties');
+    const querySnapshot = await getDocs(q);
+    let properties = querySnapshot.docs.map(doc => ({
+      ...(doc.data() as Omit<Property, 'id'>),
+      id: doc.id
+    }));
+    // (필요시 filters 적용)
+    return properties;
   },
 
   // 매물 상세 조회
   getById: async (id: string): Promise<Property | null> => {
-    // localStorage에서 최신 데이터 로드
-    mockProperties = loadPropertiesFromStorage();
-    
-    await new Promise(resolve => setTimeout(resolve, 300));
-    const property = mockProperties.find(p => p.id === id);
-    return property ? validateAndFixImages(property) : null;
+    const docRef = doc(db, 'properties', id);
+    const docSnap = await getDoc(docRef);
+    return docSnap.exists() ? { ...(docSnap.data() as Omit<Property, 'id'>), id: docSnap.id } : null;
   },
 
-  // 매물 생성 (관리자만)
-  create: async (data: PropertyFormData): Promise<Property | null> => {
-    try {
-      console.log('API create 호출됨:', {
-        title: data.title,
-        property_type: data.property_type,
-        imageCount: data.images?.length
-      });
-
-      // 데이터 검증
-      if (!data.title || !data.description || !data.price || !data.area || !data.region || !data.property_type) {
-        console.error('필수 필드 누락:', data);
-        throw new Error('필수 필드가 누락되었습니다.');
-      }
-
-      // localStorage에서 최신 데이터 로드
-      mockProperties = loadPropertiesFromStorage();
-      
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      const newProperty: Property = {
-        id: Date.now().toString(),
-        ...data,
-        price: Number(data.price),
-        area: Number(data.area),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      
-      console.log('새 매물 객체 생성됨:', {
-        id: newProperty.id,
-        title: newProperty.title,
-        imageCount: newProperty.images?.length
-      });
-      
-      // 이미지 검증 및 수정
-      const validatedProperty = validateAndFixImages(newProperty);
-      
-      console.log('이미지 검증 완료:', {
-        originalImageCount: newProperty.images?.length,
-        validatedImageCount: validatedProperty.images?.length
-      });
-      
-      // 새 매물을 배열의 맨 앞에 추가하여 최신순으로 표시
-      mockProperties.unshift(validatedProperty);
-      
-      // localStorage에 저장
-      savePropertiesToStorage(mockProperties);
-      
-      console.log('매물 저장 완료:', {
-        totalProperties: mockProperties.length,
-        newPropertyId: validatedProperty.id
-      });
-      
-      return validatedProperty;
-    } catch (error) {
-      console.error('매물 생성 중 오류:', error);
-      throw error;
-    }
+  // 매물 등록
+  create: async (data: PropertyFormData): Promise<Property> => {
+    const docRef = await addDoc(collection(db, 'properties'), {
+      ...data,
+      price: Number(data.price),
+      area: Number(data.area),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+    const docSnap = await getDoc(docRef);
+    return { ...(docSnap.data() as Omit<Property, 'id'>), id: docSnap.id };
   },
 
-  // 매물 수정 (관리자만)
-  update: async (id: string, data: PropertyFormData): Promise<Property | null> => {
-    // localStorage에서 최신 데이터 로드
-    mockProperties = loadPropertiesFromStorage();
-    
-    await new Promise(resolve => setTimeout(resolve, 500));
-    const index = mockProperties.findIndex(p => p.id === id);
-    if (index === -1) return null;
-    
-    const updatedProperty: Property = {
-      ...mockProperties[index],
+  // 매물 수정
+  update: async (id: string, data: PropertyFormData) => {
+    const docRef = doc(db, 'properties', id);
+    await updateDoc(docRef, {
       ...data,
       price: Number(data.price),
       area: Number(data.area),
       updated_at: new Date().toISOString(),
-    };
-    
-    // 이미지 검증 및 수정
-    const validatedProperty = validateAndFixImages(updatedProperty);
-    mockProperties[index] = validatedProperty;
-    
-    // localStorage에 저장
-    savePropertiesToStorage(mockProperties);
-    
-    return validatedProperty;
+    });
+    return true;
   },
 
-  // 매물 삭제 (관리자만)
-  delete: async (id: string): Promise<boolean> => {
-    // localStorage에서 최신 데이터 로드
-    mockProperties = loadPropertiesFromStorage();
-    
-    await new Promise(resolve => setTimeout(resolve, 500));
-    const index = mockProperties.findIndex(p => p.id === id);
-    if (index === -1) return false;
-    
-    mockProperties.splice(index, 1);
-    
-    // localStorage에 저장
-    savePropertiesToStorage(mockProperties);
-    
+  // 매물 삭제
+  delete: async (id: string) => {
+    const docRef = doc(db, 'properties', id);
+    await deleteDoc(docRef);
     return true;
   },
 
@@ -449,6 +320,13 @@ export const propertyApi = {
     { value: 'Land_Other', label: '토지/기타' }
   ],
 };
+
+// 이미지 업로드 함수
+export async function uploadImage(file: File) {
+  const storageRef = ref(storage, `property-images/${file.name}_${Date.now()}`);
+  await uploadBytes(storageRef, file);
+  return await getDownloadURL(storageRef);
+}
 
 // 관리자 관련 API 함수들
 export const adminApi = {

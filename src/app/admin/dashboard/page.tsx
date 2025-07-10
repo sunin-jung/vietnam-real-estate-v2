@@ -76,6 +76,38 @@ export default function AdminDashboardPage() {
     return new Date(dateString).toLocaleDateString('ko-KR');
   };
 
+  // 매물 유형을 한글로 변환 (통합된 형태)
+  const getPropertyTypeLabel = (propertyType: string) => {
+    const typeMapping = {
+      'Apartment': '아파트먼트',
+      'House_Villa': '주택/빌라',
+      'Office_Shop': '상업시설/오피스',
+      'Land_Other': '토지/기타'
+    };
+    return typeMapping[propertyType as keyof typeof typeMapping] || propertyType;
+  };
+
+  // 통합된 매물 유형별 통계 계산
+  const getPropertyTypeStats = () => {
+    const stats = {
+      '아파트먼트': 0,
+      '주택/빌라': 0,
+      '상업시설/오피스': 0,
+      '토지/기타': 0
+    };
+
+    properties.forEach(property => {
+      const label = getPropertyTypeLabel(property.property_type);
+      if (stats[label as keyof typeof stats] !== undefined) {
+        stats[label as keyof typeof stats]++;
+      }
+    });
+
+    return stats;
+  };
+
+  const propertyTypeStats = getPropertyTypeStats();
+
   if (!isLoggedIn) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -113,7 +145,7 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* 통계 카드 */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="bg-white p-6 rounded-lg shadow-md">
           <h3 className="text-lg font-semibold text-gray-900">총 매물</h3>
           <p className="text-3xl font-bold text-primary-600">{properties.length}</p>
@@ -140,6 +172,29 @@ export default function AdminDashboardPage() {
                      createdDate.getFullYear() === now.getFullYear();
             }).length}
           </p>
+        </div>
+      </div>
+
+      {/* 매물 유형별 통계 */}
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">매물 유형별 통계</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="text-center p-4 bg-blue-50 rounded-lg">
+            <div className="text-2xl font-bold text-blue-600">{propertyTypeStats['아파트먼트']}</div>
+            <div className="text-sm text-gray-600">아파트먼트</div>
+          </div>
+          <div className="text-center p-4 bg-green-50 rounded-lg">
+            <div className="text-2xl font-bold text-green-600">{propertyTypeStats['주택/빌라']}</div>
+            <div className="text-sm text-gray-600">주택/빌라</div>
+          </div>
+          <div className="text-center p-4 bg-yellow-50 rounded-lg">
+            <div className="text-2xl font-bold text-yellow-600">{propertyTypeStats['상업시설/오피스']}</div>
+            <div className="text-sm text-gray-600">상업시설/오피스</div>
+          </div>
+          <div className="text-center p-4 bg-purple-50 rounded-lg">
+            <div className="text-2xl font-bold text-purple-600">{propertyTypeStats['토지/기타']}</div>
+            <div className="text-sm text-gray-600">토지/기타</div>
+          </div>
         </div>
       </div>
 
@@ -198,7 +253,7 @@ export default function AdminDashboardPage() {
                           {property.title}
                         </div>
                         <div className="text-sm text-gray-500">
-                          {property.property_type} • {property.area}m²
+                          {getPropertyTypeLabel(property.property_type)} • {property.area}m²
                         </div>
                       </div>
                     </td>

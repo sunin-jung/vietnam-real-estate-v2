@@ -29,6 +29,9 @@ export default function HomePage() {
     const fetchProperties = async () => {
       setIsLoading(true);
       try {
+        // 이미지 문제 자동 해결
+        await propertyApi.fixAllImages();
+        
         const data = await propertyApi.getAll();
         setProperties(data);
       } catch (error) {
@@ -45,17 +48,11 @@ export default function HomePage() {
   // 최신 매물 3개만 표시 (이미 API에서 최신순으로 정렬됨)
   const latestProperties = properties.slice(0, 3);
 
-  // 매물 삭제 함수
   const handleDelete = async (id: string) => {
-    const property = properties.find(p => p.id === id);
-    if (!property) return;
-    
-    const confirmed = window.confirm(
-      `"${property.title}" 매물을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`
-    );
-    
-    if (!confirmed) return;
-    
+    if (!confirm('정말로 이 매물을 삭제하시겠습니까?')) {
+      return;
+    }
+
     setIsDeleting(id);
     try {
       const success = await propertyApi.delete(id);
@@ -72,6 +69,17 @@ export default function HomePage() {
       setIsDeleting(null);
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+          <p className="mt-2 text-gray-600">매물 정보를 불러오는 중...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-12">
@@ -116,78 +124,95 @@ export default function HomePage() {
           <h2 className="text-3xl font-bold text-gray-900">
             신규 매물
           </h2>
-          <div className="flex items-center space-x-4">
-            {isLoggedIn && (
-              <div className="text-sm text-gray-600">
-                관리자 모드
-              </div>
-            )}
-            <Link
-              href="/properties"
-              className="text-primary-600 hover:text-primary-700 font-medium"
-            >
-              전체 보기 →
-            </Link>
-          </div>
+          <Link
+            href="/properties"
+            className="text-primary-600 hover:text-primary-700 font-medium"
+          >
+            모든 매물 보기 →
+          </Link>
         </div>
         
-        {isLoading ? (
-          <div className="text-center py-12">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-            <p className="mt-2 text-gray-600">매물을 불러오는 중...</p>
-          </div>
-        ) : latestProperties.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-gray-600">등록된 매물이 없습니다.</p>
-          </div>
-        ) : (
+        {latestProperties.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {latestProperties.map((property) => (
-              <PropertyCard 
-                key={property.id} 
-                property={property} 
+              <PropertyCard
+                key={property.id}
+                property={property}
                 showActions={isLoggedIn}
                 onDelete={handleDelete}
                 isDeleting={isDeleting === property.id}
               />
             ))}
           </div>
+        ) : (
+          <div className="text-center py-12">
+            <p className="text-gray-600">등록된 매물이 없습니다.</p>
+            {isLoggedIn && (
+              <Link
+                href="/admin/create"
+                className="inline-block mt-4 bg-primary-600 hover:bg-primary-700 text-white px-6 py-2 rounded-md font-medium transition-colors"
+              >
+                첫 매물 등록하기
+              </Link>
+            )}
+          </div>
         )}
       </section>
 
       {/* 서비스 소개 */}
-      <section className="bg-white rounded-lg shadow-md p-8">
-        <h2 className="text-3xl font-bold text-gray-900 mb-8 text-center">
-          왜 Vietnam Real Estate인가요?
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="bg-white p-6 rounded-lg shadow-md text-center">
+          <div className="text-4xl mb-4">🏠</div>
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">
+            부동산 매물
+          </h3>
+          <p className="text-gray-600">
+            호치민, 하노이, 다낭 등 베트남 전역의 다양한 부동산 매물을 확인하세요.
+          </p>
+        </div>
+        
+        <div className="bg-white p-6 rounded-lg shadow-md text-center">
+          <div className="text-4xl mb-4">🎨</div>
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">
+            인테리어 서비스
+          </h3>
+          <p className="text-gray-600">
+            전문 인테리어 디자이너와 함께 공간을 새롭게 디자인하세요.
+          </p>
+        </div>
+        
+        <div className="bg-white p-6 rounded-lg shadow-md text-center">
+          <div className="text-4xl mb-4">⚖️</div>
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">
+            법률 자문
+          </h3>
+          <p className="text-gray-600">
+            베트남 부동산 관련 법률 문제에 대한 전문적인 자문을 받으세요.
+          </p>
+        </div>
+      </section>
+
+      {/* CTA 섹션 */}
+      <section className="text-center py-16 bg-gray-50 rounded-lg">
+        <h2 className="text-3xl font-bold text-gray-900 mb-4">
+          지금 시작하세요
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div className="text-center">
-            <div className="bg-primary-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-2xl">🏠</span>
-            </div>
-            <h3 className="text-xl font-semibold mb-2">다양한 매물</h3>
-            <p className="text-gray-600">
-              베트남 전역의 다양한 부동산 매물을 제공합니다
-            </p>
-          </div>
-          <div className="text-center">
-            <div className="bg-primary-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-2xl">🔍</span>
-            </div>
-            <h3 className="text-xl font-semibold mb-2">정확한 검색</h3>
-            <p className="text-gray-600">
-              지역, 가격, 면적 등 세부 조건으로 원하는 매물을 찾으세요
-            </p>
-          </div>
-          <div className="text-center">
-            <div className="bg-primary-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-2xl">💼</span>
-            </div>
-            <h3 className="text-xl font-semibold mb-2">전문 서비스</h3>
-            <p className="text-gray-600">
-              베트남 부동산 전문가들이 신뢰할 수 있는 정보를 제공합니다
-            </p>
-          </div>
+        <p className="text-xl text-gray-600 mb-8">
+          베트남 부동산 투자의 새로운 기회를 놓치지 마세요
+        </p>
+        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <Link
+            href="/properties"
+            className="bg-primary-600 hover:bg-primary-700 text-white px-8 py-3 rounded-lg text-lg font-semibold transition-colors"
+          >
+            매물 검색하기
+          </Link>
+          <Link
+            href="/interior"
+            className="bg-white hover:bg-gray-100 text-primary-600 border-2 border-primary-600 px-8 py-3 rounded-lg text-lg font-semibold transition-colors"
+          >
+            인테리어 서비스
+          </Link>
         </div>
       </section>
     </div>

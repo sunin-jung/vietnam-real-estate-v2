@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAdminStore } from '@/lib/store';
-import { PropertyFormData } from '@/types';
+import { PropertyFormData, Property } from '@/types';
 import { propertyApi } from '@/utils/api';
 
 // 동적 렌더링 설정
@@ -27,10 +27,19 @@ export default function AdminCreatePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [isClient, setIsClient] = useState(false);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const { isLoggedIn } = useAdminStore();
+
+  // 기본 이미지 URL들 (매물 유형별)
+  const defaultImages = {
+    'Apartment': 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=500',
+    'House_Villa': 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=500',
+    'Office_Shop': 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=500',
+    'Land_Other': 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=500'
+  };
 
   // 클라이언트 사이드 렌더링 확인
   useEffect(() => {
@@ -43,6 +52,11 @@ export default function AdminCreatePage() {
       router.push('/admin/login');
     }
   }, [isClient, isLoggedIn, router]);
+
+  // 매물 유형이 변경될 때 기본 이미지 추가
+  useEffect(() => {
+    // 기본 이미지 자동 추가 기능 제거
+  }, [formData.property_type]);
 
   // 컴포넌트 언마운트 시 URL 객체 정리
   useEffect(() => {
@@ -70,14 +84,12 @@ export default function AdminCreatePage() {
     '푸꾸옥',
   ];
 
+  // 매물 유형 옵션 (통합된 형태)
   const propertyTypes = [
-    'Apartment',
-    'House',
-    'Villa',
-    'Office',
-    'Shop',
-    'Land',
-    'Other'
+    { value: 'Apartment', label: '아파트먼트' },
+    { value: 'House_Villa', label: '주택/빌라' },
+    { value: 'Office_Shop', label: '상업시설/오피스' },
+    { value: 'Land_Other', label: '토지/기타' }
   ];
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -88,7 +100,7 @@ export default function AdminCreatePage() {
     }));
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!isClient) return;
     
     const files = Array.from(e.target.files || []);
@@ -101,26 +113,48 @@ export default function AdminCreatePage() {
       return;
     }
 
-    // 파일 크기 제한 (5MB)
-    const validFiles = imageFiles.filter(file => file.size <= 5 * 1024 * 1024);
+    // 파일 크기 제한 (2MB로 줄임)
+    const validFiles = imageFiles.filter(file => file.size <= 2 * 1024 * 1024);
     
     if (validFiles.length !== imageFiles.length) {
-      alert('일부 파일이 5MB 제한을 초과하여 제외되었습니다.');
+      alert('일부 파일이 2MB 제한을 초과하여 제외되었습니다.');
     }
 
-    // 기존 파일과 새 파일 합치기
-    const newFiles = [...imageFiles, ...validFiles];
-    setImageFiles(newFiles);
+    try {
+      // localStorage 정리
+      checkAndCleanStorage();
+      
+      // 파일들을 Base64로 변환
+      const base64Images = await Promise.all(
+        validFiles.map(async (file) => {
+          try {
+            return await fileToBase64(file);
+          } catch (error) {
+            console.error('이미지 변환 오류:', error);
+            // 변환 실패 시 기본 이미지 사용
+            return defaultImages[formData.property_type as keyof typeof defaultImages];
+          }
+        })
+      );
 
-    // 미리보기 URL 생성 (클라이언트 사이드에서만)
-    const newPreviewUrls = validFiles.map(file => URL.createObjectURL(file));
-    setImagePreviewUrls(prev => [...prev, ...newPreviewUrls]);
+      // 새 파일 추가
+      setImageFiles(prev => [...prev, ...validFiles]);
 
-    // formData에 이미지 URL 추가 (실제로는 파일을 업로드하지만, 여기서는 임시 URL 사용)
-    setFormData(prev => ({
-      ...prev,
-      images: [...prev.images, ...newPreviewUrls],
-    }));
+      // 미리보기 URL 생성 (클라이언트 사이드에서만)
+      const newPreviewUrls = validFiles.map(file => URL.createObjectURL(file));
+      setImagePreviewUrls(prev => [...prev, ...newPreviewUrls]);
+
+      // formData에 Base64 이미지 추가
+      setFormData(prev => ({
+        ...prev,
+        images: [...prev.images, ...base64Images],
+      }));
+
+      console.log('이미지 추가됨:', base64Images.length, '개');
+    } catch (error) {
+      console.error('이미지 처리 오류:', error);
+      alert('이미지 처리 중 오류가 발생했습니다.');
+    }
   };
 
   const handleImageRemove = (index: number) => {
@@ -131,7 +165,7 @@ export default function AdminCreatePage() {
     
     // 미리보기 URL 제거 및 메모리 해제 (클라이언트 사이드에서만)
     const urlToRemove = imagePreviewUrls[index];
-    if (urlToRemove) {
+    if (urlToRemove && urlToRemove.startsWith('blob:')) {
       URL.revokeObjectURL(urlToRemove);
     }
     setImagePreviewUrls(prev => prev.filter((_, i) => i !== index));
@@ -143,31 +177,225 @@ export default function AdminCreatePage() {
     }));
   };
 
+  // 파일을 Base64로 변환하는 함수 (압축 포함)
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      
+      img.onload = () => {
+        // 이미지 크기 조정 (최대 800px)
+        const maxSize = 800;
+        let { width, height } = img;
+        
+        if (width > height) {
+          if (width > maxSize) {
+            height = (height * maxSize) / width;
+            width = maxSize;
+          }
+        } else {
+          if (height > maxSize) {
+            width = (width * maxSize) / height;
+            height = maxSize;
+          }
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        // 이미지 그리기 (품질 0.7로 압축)
+        ctx?.drawImage(img, 0, 0, width, height);
+        
+        // JPEG 형식으로 압축 (품질 0.7)
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        resolve(compressedDataUrl);
+      };
+      
+      img.onerror = () => reject(new Error('이미지 로드 실패'));
+      
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = () => reject(new Error('파일 읽기 실패'));
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // localStorage 용량 확인 및 정리
+  const checkAndCleanStorage = () => {
+    try {
+      const stored = localStorage.getItem('vietnam-properties');
+      if (stored) {
+        const properties = JSON.parse(stored);
+        
+        // 매물이 50개를 초과하면 오래된 매물 삭제
+        if (properties.length > 50) {
+          const sortedProperties = properties.sort((a: Property, b: Property) => 
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          );
+          
+          // 최신 30개만 유지
+          const cleanedProperties = sortedProperties.slice(0, 30);
+          localStorage.setItem('vietnam-properties', JSON.stringify(cleanedProperties));
+          console.log('localStorage 정리 완료: 오래된 매물 삭제됨');
+        }
+      }
+    } catch (error) {
+      console.error('localStorage 정리 중 오류:', error);
+    }
+  };
+
+  // 이미지 순서 변경 함수들
+  const moveImage = (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) return;
+
+    // 이미지 파일 순서 변경
+    setImageFiles(prev => {
+      const newFiles = [...prev];
+      const [movedFile] = newFiles.splice(fromIndex, 1);
+      newFiles.splice(toIndex, 0, movedFile);
+      return newFiles;
+    });
+
+    // 미리보기 URL 순서 변경
+    setImagePreviewUrls(prev => {
+      const newUrls = [...prev];
+      const [movedUrl] = newUrls.splice(fromIndex, 1);
+      newUrls.splice(toIndex, 0, movedUrl);
+      return newUrls;
+    });
+
+    // formData 이미지 순서 변경
+    setFormData(prev => {
+      const newImages = [...prev.images];
+      const [movedImage] = newImages.splice(fromIndex, 1);
+      newImages.splice(toIndex, 0, movedImage);
+      return {
+        ...prev,
+        images: newImages
+      };
+    });
+  };
+
+  const moveImageUp = (index: number) => {
+    if (index > 0) {
+      moveImage(index, index - 1);
+    }
+  };
+
+  const moveImageDown = (index: number) => {
+    if (index < imageFiles.length - 1) {
+      moveImage(index, index + 1);
+    }
+  };
+
+  // 드래그 앤 드롭 이벤트 핸들러
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    if (draggedIndex !== null && draggedIndex !== dropIndex) {
+      moveImage(draggedIndex, dropIndex);
+    }
+    setDraggedIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
 
     try {
+      console.log('매물 등록 시작:', formData);
+
       // 필수 필드 검증
-      if (!formData.title || !formData.description || !formData.price || !formData.area || !formData.region) {
-        setError('모든 필수 필드를 입력해주세요.');
+      if (!formData.title || !formData.description || !formData.price || !formData.area || !formData.region || !formData.property_type) {
+        const missingFields = [];
+        if (!formData.title) missingFields.push('매물명');
+        if (!formData.description) missingFields.push('매물 설명');
+        if (!formData.price) missingFields.push('가격');
+        if (!formData.area) missingFields.push('면적');
+        if (!formData.region) missingFields.push('지역');
+        if (!formData.property_type) missingFields.push('매물 유형');
+        
+        setError(`다음 필드를 입력해주세요: ${missingFields.join(', ')}`);
+        setIsLoading(false);
         return;
       }
 
-      // 실제 구현에서는 파일을 서버에 업로드하고 URL을 받아와야 함
-      // 여기서는 임시로 미리보기 URL을 사용
-      const newProperty = await propertyApi.create(formData);
+      // 가격과 면적이 0보다 큰지 확인
+      if (formData.price <= 0) {
+        setError('가격은 0보다 커야 합니다.');
+        setIsLoading(false);
+        return;
+      }
+
+      if (formData.area <= 0) {
+        setError('면적은 0보다 커야 합니다.');
+        setIsLoading(false);
+        return;
+      }
+
+      // 이미지 처리 - 기본 이미지 자동 추가 제거
+      let finalImages = [...formData.images];
+
+      console.log('제출할 이미지 개수:', finalImages.length);
+      if (finalImages.length > 0) {
+        console.log('첫 번째 이미지:', finalImages[0]?.substring(0, 50) + '...');
+        console.log('이미지 타입 확인:', finalImages[0]?.startsWith('data:image/') ? 'Base64' : 'URL');
+      } else {
+        console.log('등록된 이미지가 없습니다.');
+      }
+
+      const submitData = {
+        ...formData,
+        images: finalImages
+      };
+
+      console.log('API 호출 전 데이터:', {
+        title: submitData.title,
+        property_type: submitData.property_type,
+        imageCount: submitData.images.length,
+        firstImageType: submitData.images[0]?.startsWith('data:image/') ? 'Base64' : 'URL'
+      });
+
+      const newProperty = await propertyApi.create(submitData);
+      
+      console.log('API 응답:', {
+        success: !!newProperty,
+        returnedImageCount: newProperty?.images?.length,
+        firstReturnedImage: newProperty?.images?.[0]?.substring(0, 50) + '...'
+      });
       
       if (newProperty) {
         alert('매물이 성공적으로 등록되었습니다.');
-        router.push('/?refresh=' + Date.now());
+        router.push('/admin/dashboard');
       } else {
-        setError('매물 등록에 실패했습니다.');
+        setError('매물 등록에 실패했습니다. 다시 시도해주세요.');
       }
     } catch (error) {
       console.error('Error creating property:', error);
-      setError('매물 등록 중 오류가 발생했습니다.');
+      
+      // 오류 메시지 개선
+      if (error instanceof Error) {
+        setError(`매물 등록 중 오류가 발생했습니다: ${error.message}`);
+      } else {
+        setError('매물 등록 중 알 수 없는 오류가 발생했습니다. 다시 시도해주세요.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -261,8 +489,8 @@ export default function AdminCreatePage() {
                 required
               >
                 {propertyTypes.map((type) => (
-                  <option key={type} value={type}>
-                    {type}
+                  <option key={type.value} value={type.value}>
+                    {type.label}
                   </option>
                 ))}
               </select>
@@ -340,29 +568,71 @@ export default function AdminCreatePage() {
                   📁 이미지 파일 선택
                 </button>
                 <p className="text-xs text-gray-500 mt-1">
-                  최대 5MB까지, 여러 파일 선택 가능
+                  최대 5MB까지, 여러 파일 선택 가능. 이미지를 선택하지 않으면 매물 유형에 맞는 기본 이미지가 사용됩니다.
                 </p>
               </div>
               
               {imagePreviewUrls.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {imagePreviewUrls.map((url, index) => (
-                    <div key={index} className="relative group">
+                    <div 
+                      key={index} 
+                      className="relative group"
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, index)}
+                      onDragOver={handleDragOver}
+                      onDrop={(e) => handleDrop(e, index)}
+                      onDragEnd={handleDragEnd}
+                    >
                       <img
                         src={url}
                         alt={`매물 이미지 ${index + 1}`}
-                        className="w-full h-32 object-cover rounded-md"
+                        className={`w-full h-32 object-cover rounded-md cursor-move transition-opacity ${
+                          draggedIndex === index ? 'opacity-50' : ''
+                        }`}
                       />
+                      
+                      {/* 이미지 순서 표시 */}
                       <div className="absolute top-2 right-2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded">
                         {index + 1}
                       </div>
+                      
+                      {/* 순서 변경 버튼들 */}
+                      <div className="absolute top-2 left-2 flex space-x-1">
+                        <button
+                          type="button"
+                          onClick={() => moveImageUp(index)}
+                          disabled={index === 0}
+                          className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white w-6 h-6 rounded text-xs font-bold transition-colors"
+                          title="위로 이동"
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveImageDown(index)}
+                          disabled={index === imagePreviewUrls.length - 1}
+                          className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white w-6 h-6 rounded text-xs font-bold transition-colors"
+                          title="아래로 이동"
+                        >
+                          ↓
+                        </button>
+                      </div>
+                      
+                      {/* 삭제 버튼 */}
                       <button
                         type="button"
                         onClick={() => handleImageRemove(index)}
-                        className="absolute top-2 left-2 bg-red-600 hover:bg-red-700 text-white w-6 h-6 rounded-full text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute top-2 left-16 bg-red-600 hover:bg-red-700 text-white w-6 h-6 rounded-full text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="이미지 삭제"
                       >
                         ×
                       </button>
+                      
+                      {/* 드래그 안내 */}
+                      <div className="absolute bottom-2 left-2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                        드래그하여 순서 변경
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -370,7 +640,7 @@ export default function AdminCreatePage() {
               
               {imagePreviewUrls.length === 0 && (
                 <p className="text-sm text-gray-500">
-                  이미지 파일을 선택하여 매물 사진을 등록할 수 있습니다.
+                  이미지 파일을 선택하여 매물 사진을 등록할 수 있습니다. 선택하지 않으면 매물 유형에 맞는 기본 이미지가 사용됩니다.
                 </p>
               )}
             </div>

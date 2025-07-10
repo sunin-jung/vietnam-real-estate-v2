@@ -13,11 +13,53 @@ export default function PropertyDetailPage() {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [error, setError] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const [modalImageIndex, setModalImageIndex] = useState(0);
   
   const params = useParams();
   const router = useRouter();
   const propertyId = params.id as string;
   const { isLoggedIn } = useAdminStore();
+
+  // 기본 이미지 URL들
+  const defaultImages = [
+    'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=500',
+    'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=500',
+    'https://images.unsplash.com/photo-1613977257363-707ba9348227?w=500',
+    'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=500',
+    'https://images.unsplash.com/photo-1570129477492-45c003edd2be?w=500'
+  ];
+
+  // 매물 유형을 한글로 변환
+  const getPropertyTypeLabel = (propertyType: string) => {
+    const typeMapping = {
+      'Apartment': '아파트먼트',
+      'House_Villa': '주택/빌라',
+      'Office_Shop': '상업시설/오피스',
+      'Land_Other': '토지/기타'
+    };
+    return typeMapping[propertyType as keyof typeof typeMapping] || propertyType;
+  };
+
+  // 이미지 URL 검증 및 기본 이미지 제공
+  const getValidImages = (images: string[] | undefined) => {
+    if (!images || images.length === 0) {
+      // 기본 이미지 사용하지 않음 - 빈 배열 반환
+      return [];
+    }
+    
+    // 유효한 이미지들만 필터링
+    const validImages = images.filter(img => {
+      if (!img) return false;
+      // Base64 이미지인지 확인
+      if (img.startsWith('data:image/')) return true;
+      // HTTP URL인지 확인
+      if (img.startsWith('http')) return true;
+      return false;
+    });
+    
+    return validImages;
+  };
 
   useEffect(() => {
     const fetchProperty = async () => {
@@ -101,6 +143,51 @@ export default function PropertyDetailPage() {
     }
   };
 
+  // 모달 관련 함수들
+  const openImageModal = (index: number) => {
+    setModalImageIndex(index);
+    setIsImageModalOpen(true);
+  };
+
+  const closeImageModal = () => {
+    setIsImageModalOpen(false);
+  };
+
+  const nextModalImage = () => {
+    if (validImages.length > 1) {
+      setModalImageIndex((prev) => 
+        prev === validImages.length - 1 ? 0 : prev + 1
+      );
+    }
+  };
+
+  const prevModalImage = () => {
+    if (validImages.length > 1) {
+      setModalImageIndex((prev) => 
+        prev === 0 ? validImages.length - 1 : prev - 1
+      );
+    }
+  };
+
+  // ESC 키로 모달 닫기
+  useEffect(() => {
+    const handleEscKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isImageModalOpen) {
+        closeImageModal();
+      }
+    };
+
+    if (isImageModalOpen) {
+      document.addEventListener('keydown', handleEscKey);
+      document.body.style.overflow = 'hidden'; // 스크롤 방지
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleEscKey);
+      document.body.style.overflow = 'unset'; // 스크롤 복원
+    };
+  }, [isImageModalOpen]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -127,6 +214,9 @@ export default function PropertyDetailPage() {
       </div>
     );
   }
+
+  // 유효한 이미지들 가져오기
+  const validImages = getValidImages(property.images);
 
   return (
     <div className="space-y-8">
@@ -187,7 +277,7 @@ export default function PropertyDetailPage() {
               <span className="mr-2">📍</span>
               <span>{property.region}</span>
               <span className="mx-2">•</span>
-              <span>{property.property_type}</span>
+              <span>{getPropertyTypeLabel(property.property_type)}</span>
             </div>
           </div>
 
@@ -201,22 +291,33 @@ export default function PropertyDetailPage() {
       </div>
 
       {/* 이미지 슬라이더 */}
-      {property.images && property.images.length > 0 && (
+      {validImages && validImages.length > 0 ? (
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
           <div className="relative">
             {/* 메인 이미지 */}
             <div className="relative h-96 lg:h-[500px] bg-gray-200">
               <img
-                src={property.images[currentImageIndex]}
+                src={validImages[currentImageIndex]}
                 alt={`${property.title} - 이미지 ${currentImageIndex + 1}`}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                onClick={() => openImageModal(currentImageIndex)}
                 onError={(e) => {
-                  e.currentTarget.src = 'https://via.placeholder.com/800x500?text=이미지+없음';
+                  // 에러 발생 시 이미지 영역을 숨김
+                  e.currentTarget.style.display = 'none';
+                  e.currentTarget.nextElementSibling?.classList.remove('hidden');
                 }}
               />
               
+              {/* 이미지 에러 시 표시할 메시지 */}
+              <div className="hidden w-full h-full flex items-center justify-center bg-gray-100">
+                <div className="text-center text-gray-500">
+                  <div className="text-6xl mb-4">📷</div>
+                  <div className="text-lg">이미지를 불러올 수 없습니다</div>
+                </div>
+              </div>
+              
               {/* 슬라이드 네비게이션 버튼 */}
-              {property.images.length > 1 && (
+              {validImages.length > 1 && (
                 <>
                   <button
                     onClick={prevImage}
@@ -234,9 +335,9 @@ export default function PropertyDetailPage() {
               )}
               
               {/* 이미지 인디케이터 */}
-              {property.images.length > 1 && (
+              {validImages.length > 1 && (
                 <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-2">
-                  {property.images.map((_, index) => (
+                  {validImages.map((_, index) => (
                     <button
                       key={index}
                       onClick={() => goToImage(index)}
@@ -252,10 +353,10 @@ export default function PropertyDetailPage() {
             </div>
 
             {/* 썸네일 이미지들 */}
-            {property.images.length > 1 && (
+            {validImages.length > 1 && (
               <div className="p-4 bg-gray-50">
                 <div className="flex space-x-2 overflow-x-auto">
-                  {property.images.map((image, index) => (
+                  {validImages.map((image, index) => (
                     <button
                       key={index}
                       onClick={() => goToImage(index)}
@@ -268,9 +369,11 @@ export default function PropertyDetailPage() {
                       <img
                         src={image}
                         alt={`썸네일 ${index + 1}`}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                        onClick={() => openImageModal(index)}
                         onError={(e) => {
-                          e.currentTarget.src = 'https://via.placeholder.com/80x64?text=이미지+없음';
+                          // 에러 발생 시 이미지 영역을 숨김
+                          e.currentTarget.style.display = 'none';
                         }}
                       />
                     </button>
@@ -278,6 +381,15 @@ export default function PropertyDetailPage() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      ) : (
+        /* 이미지가 없을 때 표시할 메시지 */
+        <div className="bg-white rounded-lg shadow-md p-8">
+          <div className="text-center text-gray-500">
+            <div className="text-6xl mb-4">📷</div>
+            <div className="text-xl font-medium mb-2">이미지가 없습니다</div>
+            <div className="text-sm">이 매물에는 등록된 이미지가 없습니다.</div>
           </div>
         </div>
       )}
@@ -315,7 +427,7 @@ export default function PropertyDetailPage() {
               
               <div className="flex justify-between">
                 <span className="text-gray-600">매물 유형</span>
-                <span className="font-medium">{property.property_type}</span>
+                <span className="font-medium">{getPropertyTypeLabel(property.property_type)}</span>
               </div>
               
               <div className="flex justify-between">
@@ -368,6 +480,62 @@ export default function PropertyDetailPage() {
           </Link>
         </div>
       </div>
+
+      {/* 이미지 모달 */}
+      {isImageModalOpen && validImages.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-90">
+          <div className="relative max-w-7xl max-h-full p-4">
+            {/* 닫기 버튼 */}
+            <button
+              onClick={closeImageModal}
+              className="absolute top-4 right-4 z-10 bg-black bg-opacity-50 text-white w-10 h-10 rounded-full flex items-center justify-center hover:bg-opacity-70 transition-opacity"
+            >
+              ×
+            </button>
+            
+            {/* 이전/다음 버튼 */}
+            {validImages.length > 1 && (
+              <>
+                <button
+                  onClick={prevModalImage}
+                  className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white p-3 rounded-full hover:bg-opacity-70 transition-opacity"
+                >
+                  ←
+                </button>
+                <button
+                  onClick={nextModalImage}
+                  className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white p-3 rounded-full hover:bg-opacity-70 transition-opacity"
+                >
+                  →
+                </button>
+              </>
+            )}
+            
+            {/* 메인 이미지 */}
+            <img
+              src={validImages[modalImageIndex]}
+              alt={`${property.title} - 원본 이미지 ${modalImageIndex + 1}`}
+              className="max-w-full max-h-[90vh] object-contain"
+            />
+            
+            {/* 이미지 정보 */}
+            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-50 text-white px-4 py-2 rounded">
+              {modalImageIndex + 1} / {validImages.length}
+            </div>
+            
+            {/* 키보드 안내 */}
+            <div className="absolute bottom-4 right-4 bg-black bg-opacity-50 text-white px-3 py-1 rounded text-sm">
+              ESC: 닫기
+            </div>
+          </div>
+          
+          {/* 배경 클릭으로 닫기 */}
+          <div 
+            className="absolute inset-0 -z-10" 
+            onClick={closeImageModal}
+          />
+        </div>
+      )}
     </div>
   );
 } 

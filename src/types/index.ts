@@ -73,9 +73,6 @@ export type Region =
 // 매물 유형 타입
 export type PropertyType = 
   | 'Apartment'
-  | 'House'
-  | 'Villa'
-  | 'Office'
-  | 'Shop'
-  | 'Land'
-  | 'Other'; 
+  | 'House_Villa'
+  | 'Office_Shop'
+  | 'Land_Other'; 

@@ -66,15 +66,25 @@ export default function PropertiesPage() {
     '기타'
   ];
 
-  const propertyTypes = [
-    'Apartment',
-    'House',
-    'Villa',
-    'Office',
-    'Shop',
-    'Land',
-    'Other'
+  // 매물 유형 옵션 (통합된 형태)
+  const propertyTypeOptions = [
+    { value: '', label: '전체' },
+    { value: 'Apartment', label: '아파트먼트' },
+    { value: 'House_Villa', label: '주택/빌라' },
+    { value: 'Office_Shop', label: '상업시설/오피스' },
+    { value: 'Land_Other', label: '토지/기타' }
   ];
+
+  // 매물 유형을 한글로 변환
+  const getPropertyTypeLabel = (propertyType: string) => {
+    const typeMapping = {
+      'Apartment': '아파트먼트',
+      'House_Villa': '주택/빌라',
+      'Office_Shop': '상업시설/오피스',
+      'Land_Other': '토지/기타'
+    };
+    return typeMapping[propertyType as keyof typeof typeMapping] || propertyType;
+  };
 
   const handleFilterChange = (key: keyof SearchFilters, value: string | number | undefined) => {
     setFilters(prev => ({
@@ -190,9 +200,9 @@ export default function PropertiesPage() {
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
               <option value="">전체</option>
-              {propertyTypes.map((type) => (
-                <option key={type} value={type}>
-                  {type}
+              {propertyTypeOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
                 </option>
               ))}
             </select>

@@ -21,6 +21,67 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// 기본 이미지 URL들 (매물 유형별)
+const defaultImages = {
+  'Apartment': 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=500',
+  'House_Villa': 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=500',
+  'Office_Shop': 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=500',
+  'Land_Other': 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=500'
+};
+
+// 매물 유형 매핑 (영어 -> 한글)
+const propertyTypeMapping = {
+  'Apartment': '아파트먼트',
+  'House_Villa': '주택/빌라',
+  'Office_Shop': '상업시설/오피스',
+  'Land_Other': '토지/기타'
+};
+
+// 기존 매물 유형을 새로운 통합된 유형으로 변환하는 함수
+const convertOldPropertyType = (oldType: string): string => {
+  const conversionMap: { [key: string]: string } = {
+    'House': 'House_Villa',
+    'Villa': 'House_Villa',
+    'Office': 'Office_Shop',
+    'Shop': 'Office_Shop',
+    'Land': 'Land_Other',
+    'Other': 'Land_Other'
+  };
+  return conversionMap[oldType] || oldType;
+};
+
+// 통합된 매물 유형 그룹
+const propertyTypeGroups = {
+  'House,Villa': ['House', 'Villa'],
+  'Office,Shop': ['Office', 'Shop'],
+  'Land,Other': ['Land', 'Other']
+};
+
+// 이미지 URL 검증 및 수정
+const validateAndFixImages = (property: Property): Property => {
+  if (!property.images || property.images.length === 0) {
+    // 기본 이미지 자동 추가 제거 - 빈 배열 반환
+    return {
+      ...property,
+      images: []
+    };
+  }
+
+  // 유효한 이미지들만 필터링
+  const validImages = property.images.filter(img => {
+    if (!img) return false;
+    if (img.startsWith('blob:')) return false; // blob URL 제외
+    if (img.startsWith('data:image/')) return true; // Base64 이미지 허용
+    if (!img.startsWith('http')) return false; // http로 시작하지 않는 URL 제외
+    return true;
+  });
+
+  return {
+    ...property,
+    images: validImages
+  };
+};
+
 // localStorage에서 매물 데이터 로드
 const loadPropertiesFromStorage = (): Property[] => {
   if (typeof window === 'undefined') return [];
@@ -30,11 +91,15 @@ const loadPropertiesFromStorage = (): Property[] => {
     try {
       const properties = JSON.parse(stored);
       
-      // 기존 데이터에서 '호치민시'를 '호치민'으로 업데이트
-      const updatedProperties = properties.map((property: Property) => ({
-        ...property,
-        region: property.region === '호치민시' ? '호치민' : property.region
-      }));
+      // 기존 데이터에서 '호치민시'를 '호치민'으로 업데이트하고 이미지 검증, 매물 유형 변환
+      const updatedProperties = properties.map((property: Property) => {
+        const fixedProperty = {
+          ...property,
+          region: property.region === '호치민시' ? '호치민' : property.region,
+          property_type: convertOldPropertyType(property.property_type)
+        };
+        return validateAndFixImages(fixedProperty);
+      });
       
       // 변경사항이 있으면 localStorage에 저장
       if (JSON.stringify(properties) !== JSON.stringify(updatedProperties)) {
@@ -70,7 +135,7 @@ const loadPropertiesFromStorage = (): Property[] => {
       area: 200,
       region: '하노이',
       transaction_type: 'sale',
-      property_type: 'Office',
+      property_type: 'Office_Shop',
       images: ['https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=500'],
       created_at: '2024-01-02T00:00:00Z',
       updated_at: '2024-01-02T00:00:00Z',
@@ -83,8 +148,8 @@ const loadPropertiesFromStorage = (): Property[] => {
       area: 150,
       region: '다낭',
       transaction_type: 'rent',
-      property_type: 'Villa',
-      images: ['https://images.unsplash.com/photo-1613977257363-707ba9348227?w=500'],
+      property_type: 'House_Villa',
+      images: ['https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=500'],
       created_at: '2024-01-03T00:00:00Z',
       updated_at: '2024-01-03T00:00:00Z',
     },
@@ -95,10 +160,77 @@ const loadPropertiesFromStorage = (): Property[] => {
   return initialProperties;
 };
 
+// localStorage 용량 확인 및 정리
+const checkStorageQuota = () => {
+  try {
+    const stored = localStorage.getItem('vietnam-properties');
+    if (stored) {
+      const properties = JSON.parse(stored);
+      
+      // 매물이 30개를 초과하면 오래된 매물 삭제
+      if (properties.length > 30) {
+        const sortedProperties = properties.sort((a: Property, b: Property) => 
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+        
+        // 최신 20개만 유지
+        const cleanedProperties = sortedProperties.slice(0, 20);
+        localStorage.setItem('vietnam-properties', JSON.stringify(cleanedProperties));
+        console.log('localStorage 정리 완료: 오래된 매물 삭제됨');
+        return cleanedProperties;
+      }
+    }
+    return stored ? JSON.parse(stored) : [];
+  } catch (error) {
+    console.error('localStorage 정리 중 오류:', error);
+    return [];
+  }
+};
+
 // 매물 데이터를 localStorage에 저장
 const savePropertiesToStorage = (properties: Property[]) => {
   if (typeof window === 'undefined') return;
-  localStorage.setItem('vietnam-properties', JSON.stringify(properties));
+  
+  try {
+    console.log('localStorage 저장 시작:', {
+      propertyCount: properties.length,
+      firstProperty: properties[0]?.title
+    });
+    
+    // 데이터 검증
+    if (!Array.isArray(properties)) {
+      throw new Error('properties는 배열이어야 합니다.');
+    }
+    
+    // 각 매물의 필수 필드 검증
+    for (let i = 0; i < properties.length; i++) {
+      const property = properties[i];
+      if (!property.id || !property.title || !property.property_type) {
+        throw new Error(`매물 ${i + 1}의 필수 필드가 누락되었습니다.`);
+      }
+    }
+    
+    // localStorage 용량 확인 및 정리
+    checkStorageQuota();
+    
+    // 저장 시도
+    try {
+      localStorage.setItem('vietnam-properties', JSON.stringify(properties));
+      console.log('localStorage 저장 완료');
+    } catch (quotaError) {
+      console.error('localStorage 용량 초과, 오래된 데이터 정리 후 재시도');
+      
+      // 용량 초과 시 오래된 매물 삭제 후 재시도
+      const cleanedProperties = checkStorageQuota();
+      const newProperties = [properties[0], ...cleanedProperties.slice(0, 19)];
+      
+      localStorage.setItem('vietnam-properties', JSON.stringify(newProperties));
+      console.log('localStorage 정리 후 저장 완료');
+    }
+  } catch (error) {
+    console.error('localStorage 저장 중 오류:', error);
+    throw error;
+  }
 };
 
 // 매물 데이터 가져오기 (localStorage에서)
@@ -137,6 +269,7 @@ export const propertyApi = {
       }
       
       if (filters.property_type) {
+        // 통합된 매물 유형 필터링 처리
         filteredProperties = filteredProperties.filter(property =>
           property.property_type === filters.property_type
         );
@@ -179,28 +312,67 @@ export const propertyApi = {
     mockProperties = loadPropertiesFromStorage();
     
     await new Promise(resolve => setTimeout(resolve, 300));
-    return mockProperties.find(p => p.id === id) || null;
+    const property = mockProperties.find(p => p.id === id);
+    return property ? validateAndFixImages(property) : null;
   },
 
   // 매물 생성 (관리자만)
   create: async (data: PropertyFormData): Promise<Property | null> => {
-    // localStorage에서 최신 데이터 로드
-    mockProperties = loadPropertiesFromStorage();
-    
-    await new Promise(resolve => setTimeout(resolve, 500));
-    const newProperty: Property = {
-      id: Date.now().toString(),
-      ...data,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    // 새 매물을 배열의 맨 앞에 추가하여 최신순으로 표시
-    mockProperties.unshift(newProperty);
-    
-    // localStorage에 저장
-    savePropertiesToStorage(mockProperties);
-    
-    return newProperty;
+    try {
+      console.log('API create 호출됨:', {
+        title: data.title,
+        property_type: data.property_type,
+        imageCount: data.images?.length
+      });
+
+      // 데이터 검증
+      if (!data.title || !data.description || !data.price || !data.area || !data.region || !data.property_type) {
+        console.error('필수 필드 누락:', data);
+        throw new Error('필수 필드가 누락되었습니다.');
+      }
+
+      // localStorage에서 최신 데이터 로드
+      mockProperties = loadPropertiesFromStorage();
+      
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      const newProperty: Property = {
+        id: Date.now().toString(),
+        ...data,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      
+      console.log('새 매물 객체 생성됨:', {
+        id: newProperty.id,
+        title: newProperty.title,
+        imageCount: newProperty.images?.length
+      });
+      
+      // 이미지 검증 및 수정
+      const validatedProperty = validateAndFixImages(newProperty);
+      
+      console.log('이미지 검증 완료:', {
+        originalImageCount: newProperty.images?.length,
+        validatedImageCount: validatedProperty.images?.length
+      });
+      
+      // 새 매물을 배열의 맨 앞에 추가하여 최신순으로 표시
+      mockProperties.unshift(validatedProperty);
+      
+      // localStorage에 저장
+      savePropertiesToStorage(mockProperties);
+      
+      console.log('매물 저장 완료:', {
+        totalProperties: mockProperties.length,
+        newPropertyId: validatedProperty.id
+      });
+      
+      return validatedProperty;
+    } catch (error) {
+      console.error('매물 생성 중 오류:', error);
+      throw error;
+    }
   },
 
   // 매물 수정 (관리자만)
@@ -217,12 +389,15 @@ export const propertyApi = {
       ...data,
       updated_at: new Date().toISOString(),
     };
-    mockProperties[index] = updatedProperty;
+    
+    // 이미지 검증 및 수정
+    const validatedProperty = validateAndFixImages(updatedProperty);
+    mockProperties[index] = validatedProperty;
     
     // localStorage에 저장
     savePropertiesToStorage(mockProperties);
     
-    return updatedProperty;
+    return validatedProperty;
   },
 
   // 매물 삭제 (관리자만)
@@ -241,6 +416,34 @@ export const propertyApi = {
     
     return true;
   },
+
+  // 이미지 문제 해결을 위한 유틸리티 함수
+  fixAllImages: async (): Promise<void> => {
+    if (typeof window === 'undefined') return;
+    
+    const stored = localStorage.getItem('vietnam-properties');
+    if (stored) {
+      try {
+        const properties = JSON.parse(stored);
+        const fixedProperties = properties.map((property: Property) => validateAndFixImages(property));
+        localStorage.setItem('vietnam-properties', JSON.stringify(fixedProperties));
+        console.log('모든 매물의 이미지가 수정되었습니다.');
+      } catch (error) {
+        console.error('이미지 수정 중 오류:', error);
+      }
+    }
+  },
+
+  // 매물 유형 매핑 가져오기
+  getPropertyTypeMapping: () => propertyTypeMapping,
+  
+  // 통합된 매물 유형 옵션 가져오기
+  getPropertyTypeOptions: () => [
+    { value: 'Apartment', label: '아파트먼트' },
+    { value: 'House_Villa', label: '주택/빌라' },
+    { value: 'Office_Shop', label: '상업시설/오피스' },
+    { value: 'Land_Other', label: '토지/기타' }
+  ],
 };
 
 // 관리자 관련 API 함수들

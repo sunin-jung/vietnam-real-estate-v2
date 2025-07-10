@@ -370,7 +370,7 @@ export default function PropertyDetailPage() {
                         src={image}
                         alt={`썸네일 ${index + 1}`}
                         className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
-                        onClick={() => openImageModal(index)}
+                        onClick={() => goToImage(index)}
                         onError={(e) => {
                           // 에러 발생 시 이미지 영역을 숨김
                           e.currentTarget.style.display = 'none';

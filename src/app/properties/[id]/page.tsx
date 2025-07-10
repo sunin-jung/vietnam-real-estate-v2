@@ -224,9 +224,12 @@ export default function PropertyDetailPage() {
       <div className="flex justify-between items-center">
         <Link
           href="/properties"
-          className="inline-flex items-center text-gray-600 hover:text-gray-900"
+          className="inline-flex flex-col items-center justify-center bg-white shadow-md border border-gray-200 text-primary-600 hover:bg-primary-50 hover:text-primary-700 px-4 py-2 rounded-full font-semibold text-base md:text-sm transition-all duration-150"
+          style={{ minWidth: 44, minHeight: 44 }}
         >
-          ← 매물 목록으로 돌아가기
+          <span className="text-center leading-tight" style={{ whiteSpace: 'pre-line' }}>
+            매물 목록으로{`\n`}돌아가기
+          </span>
         </Link>
         
         {/* 관리자용 수정/삭제 버튼 */}
@@ -234,16 +237,18 @@ export default function PropertyDetailPage() {
           <div className="flex space-x-3">
             <Link
               href={`/admin/${property.id}/edit`}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+              className="flex flex-row items-center gap-x-1 bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap"
             >
-              ✏️ 수정
+              <span className="text-base">✏️</span>
+              수정
             </Link>
             <button
               onClick={handleDelete}
               disabled={isDeleting}
-              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex flex-row items-center gap-x-1 bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isDeleting ? '삭제 중...' : '🗑️ 삭제'}
+              <span className="text-base">🗑️</span>
+              {isDeleting ? '삭제 중...' : '삭제'}
             </button>
           </div>
         )}

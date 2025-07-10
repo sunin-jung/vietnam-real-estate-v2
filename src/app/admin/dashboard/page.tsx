@@ -282,19 +282,25 @@ export default function AdminDashboardPage() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {formatDate(property.created_at)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex space-x-2">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium w-24">
+                      <div className="flex flex-row gap-1 whitespace-nowrap min-w-[90px]">
                         <Link
                           href={`/admin/${property.id}/edit`}
-                          className="text-yellow-600 hover:text-yellow-900"
+                          className="flex flex-row items-center gap-x-1 text-yellow-600 hover:text-yellow-900 text-xs px-1"
                         >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6-6m2 2l-6 6m-2 2h6" />
+                          </svg>
                           수정
                         </Link>
                         <button
                           onClick={() => handleDelete(property.id)}
                           disabled={isDeleting === property.id}
-                          className="text-red-600 hover:text-red-900 disabled:opacity-50"
+                          className="flex flex-row items-center gap-x-1 text-red-600 hover:text-red-900 disabled:opacity-50 text-xs px-1"
                         >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
                           {isDeleting === property.id ? '삭제 중...' : '삭제'}
                         </button>
                       </div>

@@ -163,6 +163,8 @@ export async function POST(request: NextRequest) {
     const newProperty: Property = {
       id: Date.now().toString(),
       ...body,
+      price: Number(body.price),
+      area: Number(body.area),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };

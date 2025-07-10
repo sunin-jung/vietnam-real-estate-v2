@@ -138,9 +138,12 @@ export default function AdminDashboardPage() {
         </div>
         <Link
           href="/admin/create"
-          className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-md font-medium transition-colors"
+          className="flex items-center justify-center bg-green-600 hover:bg-green-700 text-white px-3 py-2 md:px-4 md:py-2 rounded-full font-semibold text-xs md:text-sm transition-all duration-150 shadow-md"
+          style={{ minWidth: '41px', minHeight: '41px' }}
         >
-          + 새 매물 등록
+          <span className="text-center leading-tight" style={{ whiteSpace: 'nowrap' }}>
+            + 새 매물 등록
+          </span>
         </Link>
       </div>
 

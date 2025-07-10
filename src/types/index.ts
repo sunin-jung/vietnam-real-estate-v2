@@ -17,8 +17,8 @@ export interface Property {
 export interface PropertyFormData {
   title: string;
   description: string;
-  price: number;
-  area: number;
+  price: string | number;
+  area: string | number;
   region: string;
   transaction_type: 'sale' | 'rent';
   property_type: string;

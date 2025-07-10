@@ -14,8 +14,8 @@ export default function AdminCreatePage() {
   const [formData, setFormData] = useState<PropertyFormData>({
     title: '',
     description: '',
-    price: 0,
-    area: 0,
+    price: '', // 0 -> ''
+    area: '',  // 0 -> ''
     region: '',
     transaction_type: 'sale',
     property_type: 'Apartment',
@@ -96,7 +96,7 @@ export default function AdminCreatePage() {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: name === 'price' || name === 'area' ? parseInt(value) || 0 : value,
+      [name]: (name === 'price' || name === 'area') ? (value === '' ? '' : parseInt(value)) : value,
     }));
   };
 
@@ -113,11 +113,11 @@ export default function AdminCreatePage() {
       return;
     }
 
-    // 파일 크기 제한 (2MB로 줄임)
-    const validFiles = imageFiles.filter(file => file.size <= 2 * 1024 * 1024);
+    // 파일 크기 제한 (10MB로 상향)
+    const validFiles = imageFiles.filter(file => file.size <= 10 * 1024 * 1024);
     
     if (validFiles.length !== imageFiles.length) {
-      alert('일부 파일이 2MB 제한을 초과하여 제외되었습니다.');
+      alert('일부 파일이 10MB 제한을 초과하여 제외되었습니다.');
     }
 
     try {
@@ -404,8 +404,22 @@ export default function AdminCreatePage() {
   return (
     <div className="space-y-8">
       {/* 페이지 헤더 */}
-      <div className="flex justify-between items-center">
-        <div>
+      <div className="flex items-center gap-2 md:gap-4">
+        <Link
+          href="/admin/dashboard"
+          className="flex items-center bg-white shadow-md border border-gray-200 text-primary-600 hover:bg-primary-50 hover:text-primary-700 px-4 py-2 rounded-full font-semibold text-base md:text-sm transition-all duration-150"
+          style={{ minWidth: 44, minHeight: 44 }}
+        >
+          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+          <div className="text-center text-sm leading-tight" style={{ whiteSpace: 'nowrap' }}>
+            <span>대시보드</span>
+            <br />
+            <span>돌아가기</span>
+          </div>
+        </Link>
+        <div className="flex-grow text-center">
           <h1 className="text-3xl font-bold text-gray-900">
             새 매물 등록
           </h1>
@@ -413,12 +427,6 @@ export default function AdminCreatePage() {
             새로운 매물 정보를 입력하세요.
           </p>
         </div>
-        <Link
-          href="/admin/dashboard"
-          className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md font-medium transition-colors"
-        >
-          ← 대시보드로 돌아가기
-        </Link>
       </div>
 
       {/* 매물 등록 폼 */}
@@ -568,7 +576,7 @@ export default function AdminCreatePage() {
                   📁 이미지 파일 선택
                 </button>
                 <p className="text-xs text-gray-500 mt-1">
-                  최대 5MB까지, 여러 파일 선택 가능. 이미지를 선택하지 않으면 매물 유형에 맞는 기본 이미지가 사용됩니다.
+                  최대 10MB까지, 여러 파일 선택 가능.
                 </p>
               </div>
               

@@ -339,6 +339,8 @@ export const propertyApi = {
       const newProperty: Property = {
         id: Date.now().toString(),
         ...data,
+        price: Number(data.price),
+        area: Number(data.area),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
